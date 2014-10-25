@@ -26,7 +26,8 @@
   The "move" function must return "North", "South", "East", "West", or "Stay"
   (Anything else will be interpreted by the game as "Stay")
 
-  The "move" function should accept two arguments that the website will be passing in:
+  The "move" function should accept two arguments that the website will be
+  passing in:
     - a "gameData" object which holds all information about the current state
       of the battle
 
@@ -176,11 +177,110 @@ var moves = {
   // This hero will try really hard not to die.
   coward : function(gameData, helpers) {
     return helpers.findNearestHealthWell(gameData);
+  },
+
+  // Andrew MacFie custom strategy 
+  custom : function (gameData, helpers) {
+    // health threshold for running to a well
+    var minHealth = 76,
+    // distance for counting "nearby" enemies
+        enemyDist = 2;
+
+    var hero = gameData.activeHero,
+        board = gameData.board;
+    var dft = hero.distanceFromTop;
+    var dfl = hero.distanceFromLeft;
+    var directions = ['North', 'East', 'South', 'West'];
+
+    // there are adjacent enemies
+    var adjEnemies = false,
+    // the health of the weakest adjacent enemy
+        weakestHealth = Number.POSITIVE_INFINITY,
+    // the direction to the weakest adjacent enemy
+        weakestDir = null;
+
+    // there is an adjacent well
+    var adjWell = false,
+    // the direction to any adjacent well
+        wellDir = null;
+
+    // compute adjEnemies, weakestHealth, weakestDir, adjWell, wellDir
+    directions.forEach(function (direction) {
+      var nextTile = helpers.getTileNearby(board, dft, dfl, direction);
+      if (nextTile && nextTile.type === 'Hero' && nextTile.team !== hero.team) {
+        adjEnemies = true;
+        if (!weakestDir || nextTile.health < weakestHealth) {
+          weakestHealth = nextTile.health;
+          weakestDir = direction;
+        }
+      }
+
+      if (nextTile && nextTile.type === 'HealthWell') {
+        adjWell = true;
+        wellDir = direction;
+      }
+    });
+
+    // if adjacent enemies
+    if (adjEnemies) {
+      // if there's a well nearby, I can't kill anyone this turn, and I need
+      // health
+      if (adjWell && weakestHealth > 30 && hero.health <= 70) {
+        // go to the well
+        return wellDir;
+      } else {
+        // attack the weakest enemy
+        return weakestDir;
+      }
+    }
+
+    // if health < minHealth
+    //   go to closest well with minimal nearby enemies
+    var wellPathDir = helpers.findNearestTileWithMinEnemies(
+      gameData, 
+      hero, 
+      enemyDist,
+      function (searchTile) {
+        return searchTile.type === 'HealthWell';
+      }
+    );
+    if (hero.health < minHealth) {
+      return wellPathDir;
+    }
+    
+    // dir to closest uncapped mine with minimal nearby enemies
+    var minePathDir = helpers.findNearestTileWithMinEnemies(
+      gameData, 
+      hero, 
+      enemyDist,
+      function (searchTile) {
+        if (searchTile.type === 'DiamondMine') {
+          if (searchTile.owner) {
+            return searchTile.owner.team !== hero.team;
+          } else {
+            return true;
+          }
+        } else {
+          return false;
+        }
+      }
+    );
+
+    // if there's a mine to go to
+    if (minePathDir) {
+      // go to the mine
+      return minePathDir;
+    } else {
+      // go to a well
+      return wellPathDir;
+    }
   }
+
  };
 
-//  Set our heros strategy
-var  move =  moves.aggressor;
+//  Set our hero's strategy
+var move = moves.custom;
 
 // Export the move function here
 module.exports = move;
+
