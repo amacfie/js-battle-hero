@@ -1,3 +1,4 @@
+/*jshint esnext:true*/
 /*
 
   Strategies for the hero are contained within the "moves" object as
@@ -179,107 +180,174 @@ var moves = {
     return helpers.findNearestHealthWell(gameData);
   },
 
-  // Andrew MacFie custom strategy 
-  custom : function (gameData, helpers) {
-    // health threshold for running to a well
-    var minHealth = 76,
-    // distance for counting "nearby" enemies
-        enemyDist = 2;
-
-    var hero = gameData.activeHero,
-        board = gameData.board;
-    var dft = hero.distanceFromTop;
-    var dfl = hero.distanceFromLeft;
-    var directions = ['North', 'East', 'South', 'West'];
-
-    // there are adjacent enemies
-    var adjEnemies = false,
-    // the health of the weakest adjacent enemy
-        weakestHealth = Number.POSITIVE_INFINITY,
-    // the direction to the weakest adjacent enemy
-        weakestDir = null;
-
-    // there is an adjacent well
-    var adjWell = false,
-    // the direction to any adjacent well
-        wellDir = null;
-
-    // compute adjEnemies, weakestHealth, weakestDir, adjWell, wellDir
-    directions.forEach(function (direction) {
-      var nextTile = helpers.getTileNearby(board, dft, dfl, direction);
-      if (nextTile && nextTile.type === 'Hero' && nextTile.team !== hero.team) {
-        adjEnemies = true;
-        if (!weakestDir || nextTile.health < weakestHealth) {
-          weakestHealth = nextTile.health;
-          weakestDir = direction;
-        }
-      }
-
-      if (nextTile && nextTile.type === 'HealthWell') {
-        adjWell = true;
-        wellDir = direction;
-      }
-    });
-
-    // if adjacent enemies
-    if (adjEnemies) {
-      // if there's a well nearby, I can't kill anyone this turn, and I need
-      // health
-      if (adjWell && weakestHealth > 30 && hero.health <= 70) {
-        // go to the well
-        return wellDir;
-      } else {
-        // attack the weakest enemy
-        return weakestDir;
-      }
-    }
-
-    // if health < minHealth
-    //   go to closest well with minimal nearby enemies
-    var wellPathDir = helpers.findNearestTileWithMinEnemies(
-      gameData, 
-      hero, 
-      enemyDist,
-      function (searchTile) {
-        return searchTile.type === 'HealthWell';
-      }
-    );
-    if (hero.health < minHealth) {
-      return wellPathDir;
-    }
-    
-    // dir to closest uncapped mine with minimal nearby enemies
-    var minePathDir = helpers.findNearestTileWithMinEnemies(
-      gameData, 
-      hero, 
-      enemyDist,
-      function (searchTile) {
-        if (searchTile.type === 'DiamondMine') {
-          if (searchTile.owner) {
-            return searchTile.owner.team !== hero.team;
-          } else {
-            return true;
-          }
-        } else {
-          return false;
-        }
-      }
-    );
-
-    // if there's a mine to go to
-    if (minePathDir) {
-      // go to the mine
-      return minePathDir;
-    } else {
-      // go to a well
-      return wellPathDir;
-    }
-  }
+  custom : {}
 
  };
 
+moves.custom.balanced = function (gameData, helpers) {
+  // health threshold for running to a well
+  const minHealth = 76,
+  // m-distance for counting "nearby" enemies
+      enemyDist = 2,
+  // maximum health for an adjacent ally to be healed
+      adjAllyHealth = 70;
+
+  var hero = gameData.activeHero,
+      board = gameData.board;
+  var dft = hero.distanceFromTop;
+  var dfl = hero.distanceFromLeft;
+  var directions = ['North', 'East', 'South', 'West'];
+
+  // there are adjacent enemies
+  var adjEnemies = false,
+  // the health of the weakest adjacent enemy
+      weakestHealth = Number.POSITIVE_INFINITY,
+  // the direction to the weakest adjacent enemy
+      weakestDir = null;
+
+  // there is an adjacent well
+  var adjWell = false,
+  // the direction to any adjacent well
+      wellDir = null;
+
+  var adjAlly = false,
+      weakestAllyHealth = Number.POSITIVE_INFINITY,
+      allyDir = null;
+
+  // compute adjEnemies, weakestHealth, weakestDir, adjWell, wellDir
+  directions.forEach(function (direction) {
+    var nextTile = helpers.getTileNearby(board, dft, dfl, direction);
+
+    //check for an adjacent enemy
+    if (nextTile && nextTile.type === 'Hero' && nextTile.team !== hero.team) {
+      adjEnemies = true;
+      if (nextTile.health < weakestHealth) {
+        weakestHealth = nextTile.health;
+        weakestDir = direction;
+      }
+    }
+
+    // check for an adjacent well
+    if (nextTile && nextTile.type === 'HealthWell') {
+      adjWell = true;
+      wellDir = direction;
+    }
+
+    // check for an adjacent ally
+    if (nextTile && nextTile.type === 'Hero' && nextTile.team === hero.team) {
+      adjAlly = true;
+      if (nextTile.health < weakestAllyHealth) {
+        weakestAllyHealth = nextTile.health;
+        allyDir = direction;
+      }
+    }
+  });
+
+  // if adjacent enemies
+  if (adjEnemies) {
+    var adjEnemiesA = helpers.tilesOnPathCircle(board, hero, 1).filter(
+      function (t) {
+        return helpers.enemyB(gameData, t);
+      }
+    );
+    var adjEnemiesWellB = adjEnemiesA.filter( function (t) {
+      return helpers.tilesOnPathCircle(board, t, 1).filter( function (t) {
+        return helpers.wellB(gameData, t);
+      });
+    }).length > 0;
+    if (adjEnemiesWellB) {
+      return helpers.findNearestHealthWell(gameData);
+    }
+
+    // if there's an adjacent well, I can't kill anyone this turn, and I need
+    // health
+    if (adjWell && weakestHealth > 30 && hero.health <= 70) {
+      // go to the well
+      return wellDir;
+    } else {
+      // attack the weakest enemy
+      return weakestDir;
+    }
+  }
+
+  // if health < minHealth
+  //   go to closest well with minimal nearby enemies
+  var wellPathDir = helpers.findNearestTileWithMinEnemies(
+    gameData, 
+    hero, 
+    enemyDist,
+    function (searchTile) {
+      return searchTile.type === 'HealthWell';
+    }
+  );
+  if (hero.health < minHealth) {
+    return wellPathDir;
+  }
+
+  // if there's an adjacent ally with health <= adjAllyHealth
+  if (adjAlly && weakestAllyHealth <= adjAllyHealth) {
+    // heal the weakest such ally
+    return allyDir;
+  }
+
+  var d2Enemies = helpers.tilesOnPathCircle(board, hero, 2).filter(
+    function (t) {
+      return helpers.vulnerableEnemy(gameData, t);
+    }
+  );
+  // if there's a vulnerable enemy 2 tiles away
+  if (d2Enemies.length > 0) {
+    var weakestd2EnemyHealth = Number.POSITIVE_INFINITY,
+        weakestd2EnemyTile = null;
+    for (var i = 0; i < d2Enemies.length; ++i) {
+      if (d2Enemies[i].health < weakestd2EnemyHealth) {
+        weakestd2EnemyHealth = d2Enemies[i].health;
+        weakestd2EnemyTile = d2Enemies[i];
+      }
+    }
+    //go after the weakest such enemy
+    return helpers.findTile(gameData, weakestd2EnemyTile);
+  }
+
+  // dir to closest uncapped mine with minimal nearby enemies
+  var minePathDir = helpers.findNearestTileWithMinEnemies(
+    gameData, 
+    hero, 
+    enemyDist,
+    function (searchTile) {
+      if (searchTile.type === 'DiamondMine') {
+        if (searchTile.owner) {
+          return searchTile.owner.team !== hero.team;
+        } else {
+          return true;
+        }
+      } else {
+        return false;
+      }
+    }
+  );
+
+  // if there's a mine to go to
+  if (minePathDir) {
+    // go to the mine
+    return minePathDir;
+  } else {
+    // go to a well
+    return wellPathDir;
+  }
+};
+
+// * move to closest ally; if already close, attack any close enemies or heal
+// * move randomly sometimes to avoid boxing in
+// TODO
+moves.custom.extravert = null;
+
+// formally classify this game and implement best known strategy, e.g. minimax
+// TODO
+moves.custom.optimal = null;
+
 //  Set our hero's strategy
-var move = moves.custom;
+var move = moves.custom.balanced;
 
 // Export the move function here
 module.exports = move;

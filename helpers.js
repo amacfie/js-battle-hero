@@ -178,6 +178,20 @@ helpers.findNearestNonTeamDiamondMine = function(gameData) {
   return pathInfoObject.direction;
 };
 
+// Returns the direction of the tile
+helpers.findTile = function(gameData, tile) {
+  var hero = gameData.activeHero,
+      board = gameData.board;
+  var pathInfoObject = helpers.findNearestObjectDirectionAndDistance(
+    board,
+    hero,
+    function (searchTile) {
+      return searchTile === tile;
+    }
+  );
+  return pathInfoObject.direction;
+};
+
 // Returns the nearest unowned diamond mine or false, if there are no diamond
 // mines
 helpers.findNearestUnownedDiamondMine = function(gameData) {
@@ -366,6 +380,197 @@ helpers.findNearestTileWithMinEnemies = function (gameData, curTile, dist,
   );
 
   return pathInfoObject.direction;
+};
+
+helpers.tilesOnCircle = function (gameData, centerTile, radius) {
+  var hero = gameData.activeHero,
+      board = gameData.board;
+  var dft = centerTile.distanceFromTop,
+      dfl = centerTile.distanceFromLeft;
+  var ret = [];
+  for (var i = dft - radius; i <= dft + radius; ++i) {
+    for (var j = dfl - radius; j <= dft + radius; ++j) {
+      if (Math.abs(i - dft) + Math.abs(j - dfl) > radius) {
+        continue;
+      }
+      if (!helpers.validCoordinates(board, i, j)) {
+        continue;
+      }
+      ret.push(board.tiles[i][j]);
+    }
+  }
+  return ret;
+};
+
+helpers.tilesInPathCircle = function(board, centerTile, radius) {
+  var ret = [];
+  if (radius < 0) {
+    return ret;
+  }
+
+  // Storage queue to keep track of places the centerTile has been
+  var queue = [];
+
+  // Keeps track of places the centerTile has been for constant time lookup
+  // later
+  var visited = {};
+
+  // Variable assignments for centerTile's coordinates
+  var dft = centerTile.distanceFromTop;
+  var dfl = centerTile.distanceFromLeft;
+
+  // Stores the coordinates and distance
+  var nodeInfo = [dft, dfl, 0];
+
+  ret.push(nodeInfo);
+  //Just a unique way of storing each location we've visited
+  visited[dft + '|' + dfl] = true;
+  if (radius === 0) {
+    return ret;
+  }
+
+  // Push the starting tile on to the queue
+  queue.push(nodeInfo);
+
+  while (queue.length > 0) {
+
+    // Shift off first item in queue
+    nodeInfo = queue.shift();
+
+    // Reset the coordinates to the shifted object's coordinates
+    dft = nodeInfo[0];
+    dfl = nodeInfo[1];
+
+    // Loop through cardinal directions
+    var directions = ['North', 'East', 'South', 'West'];
+    for (var i = 0; i < directions.length; i++) {
+
+      // For each of the cardinal directions get the next tile...
+      var direction = directions[i];
+
+      // ...Use the getTileNearby helper method to do this
+      var nextTile = helpers.getTileNearby(board, dft, dfl, direction);
+
+      // If nextTile is a valid location to move...
+      if (nextTile) {
+
+        // Assign a key variable the nextTile's coordinates to put into our
+        // visited object later
+        var key = nextTile.distanceFromTop + '|' + nextTile.distanceFromLeft;
+
+        // If we have visited this tile before
+        if (visited.hasOwnProperty(key)) {
+
+          //Do nothing--this tile has already been visited
+
+        // if the tile is occupied, add it to ret
+        } else if (nextTile.type !== 'Unoccupied') {
+
+          ret.push(nextTile);
+          // Give the visited object another key with the value we stored
+          // earlier
+          visited[key] = true;
+
+          // If the tile is unoccupied, then we need to push it into our queue
+        } else if (nextTile.type === 'Unoccupied') {
+
+          var distance = nodeInfo[2] + 1;
+          if (distance < radius) {
+            queue.push([nextTile.distanceFromTop, nextTile.distanceFromLeft, 
+                       distance]);
+          }
+
+          ret.push(nextTile);
+          // Give the visited object another key with the value we stored
+          // earlier
+          visited[key] = true;
+        }
+      }
+    }
+  }
+
+  return ret;
+};
+
+helpers.tilesOnPathCircle = function(board, centerTile, radius) {
+  return intersect(
+    helpers.tilesInPathCircle(board, centerTile, radius),
+    helpers.tilesInPathCircle(board, centerTile, radius - 1)
+  );
+};
+
+// hmm
+function intersect(a, b) {
+    return a.filter(function (e) {
+        if (b.indexOf(e) !== -1) {
+          return true;
+        } else {
+          return false;
+        }
+    });
+}
+// hmm
+// a \ b
+function diff(a, b) {
+    return a.filter(function (e) {
+        if (b.indexOf(e) === -1) {
+          return true;
+        } else {
+          return false;
+        }
+    });
+}
+
+
+helpers.allyB = function (gameData, t) {
+  var hero = gameData;
+  return t.type === 'Hero' && t.team === hero.team;
+};
+
+helpers.enemyB = function (gameData, t) {
+  var hero = gameData;
+  return t.type === 'Hero' && t.team !== hero.team;
+};
+
+helpers.wellB = function (gameData, t) {
+  return t.type === 'HealthWell';
+};
+
+helpers.vulnerableEnemy = function (gameData, enemyTile) {
+  var hero = gameData.activeHero,
+      board = gameData.board;
+
+  if (!helpers.enemyB(gameData, enemyTile)) {
+    return false;
+  } 
+  
+  // no nearby well
+  var nearbyWellQ = helpers.tilesInPathCircle(board, enemyTile, 2).some(
+    function (t) { return helpers.wellB(gameData, t); }
+  ).length > 0;
+  if (nearbyWellQ) {
+    return false;
+  }
+  
+  // no other nearby enemies  
+  var nearbyEnemies = intersect(
+    helpers.tilesInPathCircle(board, hero, 2).filter(function (t) {
+      return helpers.enemyB(gameData, t);
+    }),
+    helpers.tilesInPathCircle(board, enemyTile, 2).filter(function (t) {
+      return helpers.enemyB(gameData, t);
+    })
+  );
+  if (nearbyEnemies.length > 1) {
+    return false;
+  }
+
+  if (enemyTile.health <= hero.health - 20) {
+    return true;
+  } else {
+    return false;
+  }
+
 };
 
 module.exports = helpers;
