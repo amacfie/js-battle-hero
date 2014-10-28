@@ -296,48 +296,26 @@ helpers.findNearestTeamMember = function(gameData) {
   return pathInfoObject.direction;
 };
 
-helpers.numNearbyAllies = function (gameData, tile, dist) {
-    return helpers.numNearbyTiles(gameData, tile, dist, function (searchTile) {
-      return helpers.allyB(gameData, searchTile);
-    });
-};
-
-helpers.numNearbyEnemies = function (gameData, tile, dist) {
-    return helpers.numNearbyTiles(gameData, tile, dist, function (searchTile) {
-      return helpers.enemyB(gameData, searchTile);
-    });
-};
-
-helpers.numNearbyTiles = function (gameData, tile, dist, selector) {
-  var hero = gameData.activeHero,
-      board = gameData.board;
-  var dft = tile.distanceFromTop,
-      dfl = tile.distanceFromLeft;
-  var totalTiles = 0;
-  var searchTile;
-
-  // for each pair of coordinates i,j
-  for (var i = dft - dist; i <= dft + dist; ++i) {
-    for (var j = dfl - dist; j <= dft + dist; ++j) {
-      // if the distance to these coordinates is greater than dist
-      if (Math.abs(i - dft) + Math.abs(j - dfl) > dist) {
-        continue;
-      }
-      // if these are not valid coordinates
-      if (!helpers.validCoordinates(board, i, j)) {
-        continue;
-      }      
-      searchTile = board.tiles[i][j];
-      if (selector(searchTile)) {
-        totalTiles += 1;
-      }
+helpers.numNearbyAllies = function (gameData, origin, maxMDist) {
+  var board = gameData.board;
+  return helpers.tilesInManhattanCircle(board, origin, maxMDist).filter(
+    function (t) {
+      return helpers.allyB(gameData, t);
     }
-  }
-
-  return totalTiles;
+  ).length;
 };
 
-helpers.findNearestTileWithMinEnemies = function (gameData, curTile, dist, 
+helpers.numNearbyEnemies = function (gameData, origin, maxMDist) {
+  var board = gameData.board;
+  return helpers.tilesInManhattanCircle(board, origin, maxMDist).filter(
+    function (t) {
+      return helpers.enemyB(gameData, t);
+    }
+  ).length;
+};
+
+// maxMDist is the max m-distance an enemy can be from a tile to be "nearby" to it
+helpers.findNearestTileWithMinEnemies = function (gameData, maxMDist, 
   selector) {
   var hero = gameData.activeHero,
       board = gameData.board;
@@ -353,7 +331,7 @@ helpers.findNearestTileWithMinEnemies = function (gameData, curTile, dist,
         continue;
       }
       // the number of enemies nearby to tile
-      var numEnemies = helpers.numNearbyEnemies(gameData, tile, dist);
+      var numEnemies = helpers.numNearbyEnemies(gameData, tile, maxMDist);
       if (numEnemies === minEnemies) {
         candidateTiles.push(tile);
       } else if (numEnemies < minEnemies) {
@@ -363,28 +341,22 @@ helpers.findNearestTileWithMinEnemies = function (gameData, curTile, dist,
     }
   }
 
-  if (candidateTiles.length === 0) {
-    return null;
-  }
-
   // the path to the nearest tile in candidateTiles
   var pathInfoObject = helpers.findNearestObjectDirectionAndDistance(
     board, 
     hero, 
     // searchTile is in candidateTiles
-    function (searchTile) {
-      return candidateTiles.indexOf(searchTile) >= 0;
+    function (t) {
+      return candidateTiles.indexOf(t) >= 0;
     }
   );
 
   return pathInfoObject.direction;
 };
 
-helpers.tilesInManhattanCircle = function (gameData, centerTile, radius) {
-  var hero = gameData.activeHero,
-      board = gameData.board;
-  var dft = centerTile.distanceFromTop,
-      dfl = centerTile.distanceFromLeft;
+helpers.tilesInManhattanCircle = function (board, center, radius) {
+  var dft = center.distanceFromTop,
+      dfl = center.distanceFromLeft;
   var ret = [];
   for (var i = dft - radius; i <= dft + radius; ++i) {
     for (var j = dfl - radius; j <= dft + radius; ++j) {
@@ -400,10 +372,10 @@ helpers.tilesInManhattanCircle = function (gameData, centerTile, radius) {
   return ret;
 };
 
-helpers.tilesOnManhattanCircle = function (gameData, center, radius) {
-  return diff(
-      helpers.tilesInManhattanCircle(gameData, center, radius),
-      helpers.tilesInManhattanCircle(gameData, center, radius - 1)
+helpers.tilesOnManhattanCircle = function (board, center, radius) {
+  return helpers.diff(
+      helpers.tilesInManhattanCircle(board, center, radius),
+      helpers.tilesInManhattanCircle(board, center, radius - 1)
   );
 };
 
@@ -498,10 +470,10 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
   return ret;
 };
 
-helpers.tilesOnPathCircle = function(board, centerTile, radius) {
-  return diff(
-    helpers.tilesInPathCircle(board, centerTile, radius),
-    helpers.tilesInPathCircle(board, centerTile, radius - 1)
+helpers.tilesOnPathCircle = function(board, center, radius) {
+  return helpers.diff(
+    helpers.tilesInPathCircle(board, center, radius),
+    helpers.tilesInPathCircle(board, center, radius - 1)
   );
 };
 
@@ -554,28 +526,44 @@ helpers.wellB = function (gameData, t) {
   return t.type === 'HealthWell';
 };
 
-helpers.vulnerableEnemy = function (gameData, enemyTile) {
+helpers.nonTeamMineB = function (gameData, t) {
+  var hero = gameData.activeHero;
+
+  if (t.type === 'DiamondMine') {
+    if (t.owner) {
+      return t.owner.team !== hero.team;
+    } else {
+      return true;
+    }
+  } else {
+    return false;
+  }
+};
+
+helpers.vulnerableEnemyB = function (gameData, tile) {
   var hero = gameData.activeHero,
       board = gameData.board;
 
-  if (!helpers.enemyB(gameData, enemyTile)) {
+  if (!helpers.enemyB(gameData, tile)) {
     return false;
   } 
-  
+
   // no nearby well
-  var nearbyWellB = helpers.tilesInPathCircle(board, enemyTile, 2).some(
-    function (t) { return helpers.wellB(gameData, t); }
+  var nearbyWellB = helpers.tilesInPathCircle(board, tile, 2).some(
+    function (t) { 
+      return helpers.wellB(gameData, t); 
+    }
   );
   if (nearbyWellB) {
     return false;
   }
 
   // no other nearby enemies  
-  var nearbyEnemies = intersect(
+  var nearbyEnemies = helpers.intersect(
     helpers.tilesInPathCircle(board, hero, 2).filter(function (t) {
       return helpers.enemyB(gameData, t);
     }),
-    helpers.tilesInPathCircle(board, enemyTile, 2).filter(function (t) {
+    helpers.tilesInPathCircle(board, tile, 2).filter(function (t) {
       return helpers.enemyB(gameData, t);
     })
   );
@@ -583,7 +571,7 @@ helpers.vulnerableEnemy = function (gameData, enemyTile) {
     return false;
   }
 
-  if (enemyTile.health <= hero.health - 20) {
+  if (tile.health <= hero.health - 20) {
     return true;
   } else {
     return false;
