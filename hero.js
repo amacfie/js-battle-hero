@@ -41,7 +41,7 @@
 
 */
 
-// Strategy definitions
+// Built-in strategy definitions
 var moves = {
   // Aggressor
   aggressor: function(gameData, helpers) {
@@ -184,13 +184,36 @@ var moves = {
 
  };
 
+// Custom strategy definitions
+
+// "Balanced" strategy:
+// Follow a set of somewhat reasonable rules:
+
+// if there are adjacent enemies
+//   if there's an adjacent well, I can't kill an adjacent enemy this turn, and
+//   health <= minHealth
+//     go to the well
+//   else
+//     attack the weakest adjacent enemy
+// if health <= minHealth
+//   go to closest well with minimal nearby enemies
+// if there's an adjacent ally with health <= minHealth
+//   heal the weakest such ally
+// if there's a vulnerable enemy 2 steps away
+//   go to the weakest such enemy
+// if there's a non-team mine to go to
+//   go to the closest non-team mine with minimal nearby enemies
+// else
+//   go to the closest well with minimal nearby enemies
+
 moves.custom.balanced = function (gameData, helpers) {
-  // health threshold for running to a well
-  const minHealth = 76,
+  // "m-distance" is Manhattan distance
+  // "p-distance" is shortest path distance
+
+  // health threshold for running to a well or an adjacent ally to be healed
+  const minHealth = 70,
   // m-distance for counting "nearby" enemies
-      enemyDist = 2,
-  // maximum health for an adjacent ally to be healed
-      adjAllyHealth = 70;
+    enemyDist = 2;
 
   var hero = gameData.activeHero,
       board = gameData.board;
@@ -261,7 +284,7 @@ moves.custom.balanced = function (gameData, helpers) {
 
     // if there's an adjacent well, I can't kill anyone this turn, and I need
     // health
-    if (adjWell && weakestHealth > 30 && hero.health <= 70) {
+    if (adjWell && weakestHealth > 30 && hero.health <= minHealth) {
       // go to the well
       return wellDir;
     } else {
@@ -270,8 +293,6 @@ moves.custom.balanced = function (gameData, helpers) {
     }
   }
 
-  // if health < minHealth
-  //   go to closest well with minimal nearby enemies
   var wellPathDir = helpers.findNearestTileWithMinEnemies(
     gameData, 
     hero, 
@@ -280,12 +301,14 @@ moves.custom.balanced = function (gameData, helpers) {
       return searchTile.type === 'HealthWell';
     }
   );
-  if (hero.health < minHealth) {
+  // if health <= minHealth
+  if (hero.health <= minHealth) {
+    // go to closest well with minimal nearby enemies
     return wellPathDir;
   }
 
   // if there's an adjacent ally with health <= adjAllyHealth
-  if (adjAlly && weakestAllyHealth <= adjAllyHealth) {
+  if (adjAlly && weakestAllyHealth <= minHealth) {
     // heal the weakest such ally
     return allyDir;
   }
@@ -337,14 +360,17 @@ moves.custom.balanced = function (gameData, helpers) {
   }
 };
 
+// "Extravert" strategy:
 // * move to closest ally; if already close, attack any close enemies or heal
-// * move randomly sometimes to avoid boxing in
+// * move randomly sometimes to avoid getting stuck
 // TODO
 moves.custom.extravert = null;
 
+// "Optimal" strategy:
 // formally classify this game and implement best known strategy, e.g. minimax
 // TODO
 moves.custom.optimal = null;
+
 
 //  Set our hero's strategy
 var move = moves.custom.balanced;

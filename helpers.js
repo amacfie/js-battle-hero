@@ -297,16 +297,14 @@ helpers.findNearestTeamMember = function(gameData) {
 };
 
 helpers.numNearbyAllies = function (gameData, tile, dist) {
-    var hero = gameData.activeHero;
     return helpers.numNearbyTiles(gameData, tile, dist, function (searchTile) {
-      return searchTile.type === 'Hero' && searchTile.team === hero.team;
+      return helpers.allyB(gameData, searchTile);
     });
 };
 
 helpers.numNearbyEnemies = function (gameData, tile, dist) {
-    var hero = gameData.activeHero;
     return helpers.numNearbyTiles(gameData, tile, dist, function (searchTile) {
-      return searchTile.type === 'Hero' && searchTile.team !== hero.team;
+      return helpers.enemyB(gameData, searchTile);
     });
 };
 
@@ -382,7 +380,7 @@ helpers.findNearestTileWithMinEnemies = function (gameData, curTile, dist,
   return pathInfoObject.direction;
 };
 
-helpers.tilesOnCircle = function (gameData, centerTile, radius) {
+helpers.tilesInManhattanCircle = function (gameData, centerTile, radius) {
   var hero = gameData.activeHero,
       board = gameData.board;
   var dft = centerTile.distanceFromTop,
@@ -400,6 +398,13 @@ helpers.tilesOnCircle = function (gameData, centerTile, radius) {
     }
   }
   return ret;
+};
+
+helpers.tilesOnManhattanCircle = function (gameData, center, radius) {
+  return diff(
+      helpers.tilesInManhattanCircle(gameData, center, radius),
+      helpers.tilesInManhattanCircle(gameData, center, radius - 1)
+  );
 };
 
 helpers.tilesInPathCircle = function(board, centerTile, radius) {
@@ -422,19 +427,20 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
   // Stores the coordinates and distance
   var nodeInfo = [dft, dfl, 0];
 
-  ret.push(nodeInfo);
-  //Just a unique way of storing each location we've visited
-  visited[dft + '|' + dfl] = true;
+  ret.push(centerTile);
   if (radius === 0) {
     return ret;
   }
 
+  //Just a unique way of storing each location we've visited
+  visited[dft + '|' + dfl] = true;
   // Push the starting tile on to the queue
   queue.push(nodeInfo);
 
   while (queue.length > 0) {
 
     // Shift off first item in queue
+    // The distance to this node is < radius
     nodeInfo = queue.shift();
 
     // Reset the coordinates to the shifted object's coordinates
@@ -447,6 +453,8 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
 
       // For each of the cardinal directions get the next tile...
       var direction = directions[i];
+
+      var distance = nodeInfo[2] + 1;
 
       // ...Use the getTileNearby helper method to do this
       var nextTile = helpers.getTileNearby(board, dft, dfl, direction);
@@ -473,8 +481,6 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
 
           // If the tile is unoccupied, then we need to push it into our queue
         } else if (nextTile.type === 'Unoccupied') {
-
-          var distance = nodeInfo[2] + 1;
           if (distance < radius) {
             queue.push([nextTile.distanceFromTop, nextTile.distanceFromLeft, 
                        distance]);
@@ -493,14 +499,14 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
 };
 
 helpers.tilesOnPathCircle = function(board, centerTile, radius) {
-  return intersect(
+  return diff(
     helpers.tilesInPathCircle(board, centerTile, radius),
     helpers.tilesInPathCircle(board, centerTile, radius - 1)
   );
 };
 
-// hmm
-function intersect(a, b) {
+// http://underscorejs.org/#intersection
+helpers.intersect = function (a, b) {
     return a.filter(function (e) {
         if (b.indexOf(e) !== -1) {
           return true;
@@ -508,10 +514,9 @@ function intersect(a, b) {
           return false;
         }
     });
-}
-// hmm
-// a \ b
-function diff(a, b) {
+};
+// http://underscorejs.org/#difference
+helpers.diff = function (a, b) {
     return a.filter(function (e) {
         if (b.indexOf(e) === -1) {
           return true;
@@ -519,16 +524,29 @@ function diff(a, b) {
           return false;
         }
     });
-}
-
+};
+// http://underscorejs.org/#min
+helpers.min = function (list, iteratee) {
+  var minEl = null,
+    minVal = Number.POSITIVE_INFINITY;
+  for (var i=0; i < list.length; ++i) {
+    var el = list[i],
+      val = iteratee(el);
+    if (val < minVal) {
+      minVal = val;
+      minEl = el;
+    }
+  }
+  return minEl;
+};
 
 helpers.allyB = function (gameData, t) {
-  var hero = gameData;
+  var hero = gameData.activeHero;
   return t.type === 'Hero' && t.team === hero.team;
 };
 
 helpers.enemyB = function (gameData, t) {
-  var hero = gameData;
+  var hero = gameData.activeHero;
   return t.type === 'Hero' && t.team !== hero.team;
 };
 
@@ -545,13 +563,13 @@ helpers.vulnerableEnemy = function (gameData, enemyTile) {
   } 
   
   // no nearby well
-  var nearbyWellQ = helpers.tilesInPathCircle(board, enemyTile, 2).some(
+  var nearbyWellB = helpers.tilesInPathCircle(board, enemyTile, 2).some(
     function (t) { return helpers.wellB(gameData, t); }
-  ).length > 0;
-  if (nearbyWellQ) {
+  );
+  if (nearbyWellB) {
     return false;
   }
-  
+
   // no other nearby enemies  
   var nearbyEnemies = intersect(
     helpers.tilesInPathCircle(board, hero, 2).filter(function (t) {
