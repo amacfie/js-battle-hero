@@ -314,7 +314,8 @@ helpers.numNearbyEnemies = function (gameData, origin, maxMDist) {
   ).length;
 };
 
-// maxMDist is the max m-distance an enemy can be from a tile to be "nearby" to it
+// maxMDist is the max m-distance an enemy can be from a tile to be "nearby" to
+// it
 helpers.findNearestTileWithMinEnemies = function (gameData, maxMDist, 
   selector) {
   var hero = gameData.activeHero,
@@ -323,23 +324,18 @@ helpers.findNearestTileWithMinEnemies = function (gameData, maxMDist,
   var minEnemies = Number.POSITIVE_INFINITY;
   var candidateTiles = [];
 
-  // for each pair of coordinates i,j
-  for (var i = 0; i < board.lengthOfSide; ++i) {
-    for (var j = 0; j < board.lengthOfSide; ++j) {
-      var tile = board.tiles[i][j];
-      if (!selector(tile)) {
-        continue;
-      }
-      // the number of enemies nearby to tile
-      var numEnemies = helpers.numNearbyEnemies(gameData, tile, maxMDist);
-      if (numEnemies === minEnemies) {
-        candidateTiles.push(tile);
-      } else if (numEnemies < minEnemies) {
-        minEnemies = numEnemies;
-        candidateTiles = [tile];
-      }
+  var allAccessibleCells = helpers.tilesInPathCircle(board, hero, 
+    Number.POSITIVE_INFINITY);
+  allAccessibleCells.filter(selector).forEach(function (tile) {
+    // the number of enemies nearby to tile
+    var numEnemies = helpers.numNearbyEnemies(gameData, tile, maxMDist);
+    if (numEnemies === minEnemies) {
+      candidateTiles.push(tile);
+    } else if (numEnemies < minEnemies) {
+      minEnemies = numEnemies;
+      candidateTiles = [tile];
     }
-  }
+  });
 
   // the path to the nearest tile in candidateTiles
   var pathInfoObject = helpers.findNearestObjectDirectionAndDistance(
@@ -359,7 +355,7 @@ helpers.tilesInManhattanCircle = function (board, center, radius) {
       dfl = center.distanceFromLeft;
   var ret = [];
   for (var i = dft - radius; i <= dft + radius; ++i) {
-    for (var j = dfl - radius; j <= dft + radius; ++j) {
+    for (var j = dfl - radius; j <= dfl + radius; ++j) {
       if (Math.abs(i - dft) + Math.abs(j - dfl) > radius) {
         continue;
       }

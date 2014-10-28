@@ -236,14 +236,20 @@ moves.custom.balanced = function (gameData, helpers) {
     }
   );
 
+  console.log('adjEnemiesA.length: ', adjEnemiesA.length);//JFT
+  console.log('adjWellsA.length: ', adjWellsA.length);//JFT
+  console.log('number of adjacent tiles: ', helpers.tilesOnManhattanCircle(
+    board, hero, 1).length);//JFT
   if (adjEnemiesA.length > 0) {
     var weakestAdjEnemy = helpers.min(adjEnemiesA, function (t) {
       return t.health;
     });
     if (adjWellsA.length > 0 && weakestAdjEnemy.health > 30 && 
         hero.health <= minHealth) {
+      console.log('Going to an adjacent well.');
       return helpers.findNearestHealthWell(gameData);
     } else {
+      console.log('Attack!');
       return helpers.findTile(gameData, weakestAdjEnemy);
     }
   }
@@ -257,6 +263,7 @@ moves.custom.balanced = function (gameData, helpers) {
   );
 
   if (hero.health <= minHealth) {
+    console.log('I need health! Finding a well...');
     return minEnemiesWellDir;
   }
 
@@ -265,6 +272,7 @@ moves.custom.balanced = function (gameData, helpers) {
       return t.health;
     });
     if (weakestAdjAlly.health <= minHealth) {
+      console.log('Be healed!');
       return helpers.findTile(gameData, weakestAdjAlly);
     }
   }
@@ -278,6 +286,7 @@ moves.custom.balanced = function (gameData, helpers) {
     var weakestpDist2Enemy = helpers.min(pDist2Enemies, function (t) {
       return t.health;
     });
+    console.log('I\'m coming for you!');
     return helpers.findTile(gameData, weakestpDist2Enemy);
   }
 
@@ -290,8 +299,10 @@ moves.custom.balanced = function (gameData, helpers) {
   );
 
   if (minEnemiesNonTeamMineDir ) {
+    console.log('Going mining.');
     return minEnemiesNonTeamMineDir;
   } else {
+    console.log('Yawn. I\'ll head to a well.');
     return minEnemiesWellDir;
   }
 
