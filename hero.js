@@ -41,6 +41,25 @@
 
 */
 
+// Some utility functions
+
+var util = {};
+
+// Simplified version of http://underscorejs.org/#min
+util.min = function (list, iteratee) {
+  var minEl = null,
+    minVal = Number.POSITIVE_INFINITY;
+  for (var i=0; i < list.length; ++i) {
+    var el = list[i],
+      val = iteratee(el);
+    if (val < minVal) {
+      minVal = val;
+      minEl = el;
+    }
+  }
+  return minEl;
+};
+
 // Built-in strategy definitions
 var moves = {
   // Aggressor
@@ -236,12 +255,8 @@ moves.custom.balanced = function (gameData, helpers) {
     }
   );
 
-  console.log('adjEnemiesA.length: ', adjEnemiesA.length);//JFT
-  console.log('adjWellsA.length: ', adjWellsA.length);//JFT
-  console.log('number of adjacent tiles: ', helpers.tilesOnManhattanCircle(
-    board, hero, 1).length);//JFT
   if (adjEnemiesA.length > 0) {
-    var weakestAdjEnemy = helpers.min(adjEnemiesA, function (t) {
+    var weakestAdjEnemy = util.min(adjEnemiesA, function (t) {
       return t.health;
     });
     if (adjWellsA.length > 0 && weakestAdjEnemy.health > 30 && 
@@ -268,7 +283,7 @@ moves.custom.balanced = function (gameData, helpers) {
   }
 
   if (adjAlliesA.length > 0) {
-    var weakestAdjAlly = helpers.min(adjAlliesA, function (t) {
+    var weakestAdjAlly = util.min(adjAlliesA, function (t) {
       return t.health;
     });
     if (weakestAdjAlly.health <= minHealth) {
@@ -283,7 +298,7 @@ moves.custom.balanced = function (gameData, helpers) {
     }
   );
   if (pDist2Enemies.length > 0) {
-    var weakestpDist2Enemy = helpers.min(pDist2Enemies, function (t) {
+    var weakestpDist2Enemy = util.min(pDist2Enemies, function (t) {
       return t.health;
     });
     console.log('I\'m coming for you!');

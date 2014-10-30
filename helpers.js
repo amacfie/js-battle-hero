@@ -296,59 +296,32 @@ helpers.findNearestTeamMember = function(gameData) {
   return pathInfoObject.direction;
 };
 
-helpers.numNearbyAllies = function (gameData, origin, maxMDist) {
-  var board = gameData.board;
-  return helpers.tilesInManhattanCircle(board, origin, maxMDist).filter(
-    function (t) {
-      return helpers.allyB(gameData, t);
-    }
-  ).length;
+// Some utility functions
+
+var util = {};
+
+// Simplified version of http://underscorejs.org/#intersection
+util.intersect = function (a, b) {
+    return a.filter(function (e) {
+        if (b.indexOf(e) !== -1) {
+          return true;
+        } else {
+          return false;
+        }
+    });
+};
+// Simplified version of http://underscorejs.org/#difference
+util.diff = function (a, b) {
+    return a.filter(function (e) {
+        if (b.indexOf(e) === -1) {
+          return true;
+        } else {
+          return false;
+        }
+    });
 };
 
-helpers.numNearbyEnemies = function (gameData, origin, maxMDist) {
-  var board = gameData.board;
-  return helpers.tilesInManhattanCircle(board, origin, maxMDist).filter(
-    function (t) {
-      return helpers.enemyB(gameData, t);
-    }
-  ).length;
-};
-
-// maxMDist is the max m-distance an enemy can be from a tile to be "nearby" to
-// it
-helpers.findNearestTileWithMinEnemies = function (gameData, maxMDist, 
-  selector) {
-  var hero = gameData.activeHero,
-      board = gameData.board;
-  // the minimum number of enemies nearby a selected tile
-  var minEnemies = Number.POSITIVE_INFINITY;
-  var candidateTiles = [];
-
-  var allAccessibleCells = helpers.tilesInPathCircle(board, hero, 
-    Number.POSITIVE_INFINITY);
-  allAccessibleCells.filter(selector).forEach(function (tile) {
-    // the number of enemies nearby to tile
-    var numEnemies = helpers.numNearbyEnemies(gameData, tile, maxMDist);
-    if (numEnemies === minEnemies) {
-      candidateTiles.push(tile);
-    } else if (numEnemies < minEnemies) {
-      minEnemies = numEnemies;
-      candidateTiles = [tile];
-    }
-  });
-
-  // the path to the nearest tile in candidateTiles
-  var pathInfoObject = helpers.findNearestObjectDirectionAndDistance(
-    board, 
-    hero, 
-    // searchTile is in candidateTiles
-    function (t) {
-      return candidateTiles.indexOf(t) >= 0;
-    }
-  );
-
-  return pathInfoObject.direction;
-};
+// Custom helpers
 
 helpers.tilesInManhattanCircle = function (board, center, radius) {
   var dft = center.distanceFromTop,
@@ -369,33 +342,33 @@ helpers.tilesInManhattanCircle = function (board, center, radius) {
 };
 
 helpers.tilesOnManhattanCircle = function (board, center, radius) {
-  return helpers.diff(
+  return util.diff(
       helpers.tilesInManhattanCircle(board, center, radius),
       helpers.tilesInManhattanCircle(board, center, radius - 1)
   );
 };
 
-helpers.tilesInPathCircle = function(board, centerTile, radius) {
+helpers.tilesInPathCircle = function (board, center, radius) {
   var ret = [];
   if (radius < 0) {
     return ret;
   }
 
-  // Storage queue to keep track of places the centerTile has been
+  // BFS queue
   var queue = [];
 
-  // Keeps track of places the centerTile has been for constant time lookup
+  // Keeps track of places the center has been for constant time lookup
   // later
   var visited = {};
 
-  // Variable assignments for centerTile's coordinates
-  var dft = centerTile.distanceFromTop;
-  var dfl = centerTile.distanceFromLeft;
+  // center's coordinates
+  var dft = center.distanceFromTop;
+  var dfl = center.distanceFromLeft;
 
-  // Stores the coordinates and distance
+  // Stores the coordinates and distance of a node (tile)
   var nodeInfo = [dft, dfl, 0];
 
-  ret.push(centerTile);
+  ret.push(center);
   if (radius === 0) {
     return ret;
   }
@@ -447,7 +420,8 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
           // earlier
           visited[key] = true;
 
-          // If the tile is unoccupied, then we need to push it into our queue
+        // If the tile is unoccupied, then we need to push it into our queue
+        // TODO: make sure tombstones are 'Unoccupied'
         } else if (nextTile.type === 'Unoccupied') {
           if (distance < radius) {
             queue.push([nextTile.distanceFromTop, nextTile.distanceFromLeft, 
@@ -466,68 +440,79 @@ helpers.tilesInPathCircle = function(board, centerTile, radius) {
   return ret;
 };
 
-helpers.tilesOnPathCircle = function(board, center, radius) {
-  return helpers.diff(
+helpers.tilesOnPathCircle = function (board, center, radius) {
+  return util.diff(
     helpers.tilesInPathCircle(board, center, radius),
     helpers.tilesInPathCircle(board, center, radius - 1)
   );
 };
 
-// http://underscorejs.org/#intersection
-helpers.intersect = function (a, b) {
-    return a.filter(function (e) {
-        if (b.indexOf(e) !== -1) {
-          return true;
-        } else {
-          return false;
-        }
-    });
-};
-// http://underscorejs.org/#difference
-helpers.diff = function (a, b) {
-    return a.filter(function (e) {
-        if (b.indexOf(e) === -1) {
-          return true;
-        } else {
-          return false;
-        }
-    });
-};
-// http://underscorejs.org/#min
-helpers.min = function (list, iteratee) {
-  var minEl = null,
-    minVal = Number.POSITIVE_INFINITY;
-  for (var i=0; i < list.length; ++i) {
-    var el = list[i],
-      val = iteratee(el);
-    if (val < minVal) {
-      minVal = val;
-      minEl = el;
+helpers.numNearbyEnemies = function (gameData, origin, maxMDist) {
+  var board = gameData.board;
+  return helpers.tilesInManhattanCircle(board, origin, maxMDist).filter(
+    function (t) {
+      return helpers.enemyB(gameData, t);
     }
-  }
-  return minEl;
+  ).length;
 };
 
-helpers.allyB = function (gameData, t) {
+// maxMDist is the max m-distance an enemy can be from a tile to be "nearby" to
+// it
+helpers.findNearestTileWithMinEnemies = function (gameData, maxMDist, 
+  selector) {
+  var hero = gameData.activeHero,
+      board = gameData.board;
+  // the accessible tiles that satisfy selector with minimal nearby enemies
+  var candidateTiles = [];
+  // the number of enemies nearby a candidate tile
+  var minEnemies = Number.POSITIVE_INFINITY;
+
+  var allAccessibleCells = helpers.tilesInPathCircle(board, hero, 
+    Number.POSITIVE_INFINITY);
+  allAccessibleCells.filter(selector).forEach(function (t) {
+    // the number of enemies nearby to t
+    var numEnemies = helpers.numNearbyEnemies(gameData, t, maxMDist);
+    if (numEnemies === minEnemies) {
+      candidateTiles.push(t);
+    } else if (numEnemies < minEnemies) {
+      minEnemies = numEnemies;
+      candidateTiles = [t];
+    }
+  });
+
+  // the path to the nearest tile in candidateTiles
+  var pathInfoObject = helpers.findNearestObjectDirectionAndDistance(
+    board, 
+    hero, 
+    // searchTile is in candidateTiles
+    function (t) {
+      return candidateTiles.indexOf(t) >= 0;
+    }
+  );
+
+  return pathInfoObject.direction;
+};
+
+helpers.allyB = function (gameData, tile) {
   var hero = gameData.activeHero;
-  return t.type === 'Hero' && t.team === hero.team;
+  return tile.type === 'Hero' && tile.team === hero.team;
 };
 
-helpers.enemyB = function (gameData, t) {
+helpers.enemyB = function (gameData, tile) {
   var hero = gameData.activeHero;
-  return t.type === 'Hero' && t.team !== hero.team;
+  return tile.type === 'Hero' && tile.team !== hero.team;
 };
 
-helpers.wellB = function (gameData, t) {
-  return t.type === 'HealthWell';
+helpers.wellB = function (gameData, tile) {
+  return tile.type === 'HealthWell';
 };
 
-helpers.nonTeamMineB = function (gameData, t) {
+helpers.nonTeamMineB = function (gameData, tile) {
   var hero = gameData.activeHero;
 
-  if (t.type === 'DiamondMine') {
-    if (t.owner) {
-      return t.owner.team !== hero.team;
+  if (tile.type === 'DiamondMine') {
+    if (tile.owner) {
+      return tile.owner.team !== hero.team;
     } else {
       return true;
     }
@@ -554,19 +539,18 @@ helpers.vulnerableEnemyB = function (gameData, tile) {
     return false;
   }
 
-  // no other nearby enemies  
-  var nearbyEnemies = helpers.intersect(
-    helpers.tilesInPathCircle(board, hero, 2).filter(function (t) {
-      return helpers.enemyB(gameData, t);
-    }),
-    helpers.tilesInPathCircle(board, tile, 2).filter(function (t) {
-      return helpers.enemyB(gameData, t);
-    })
-  );
+  // no other enemies nearby to both tile and hero
+  var nearbyEnemies = util.intersect(
+    helpers.tilesInPathCircle(board, hero, 2),
+    helpers.tilesInPathCircle(board, tile, 2)
+  ).filter(function (t) {
+    return helpers.enemyB(gameData, t);
+  });
   if (nearbyEnemies.length > 1) {
     return false;
   }
 
+  // our health difference is at least 20
   if (tile.health <= hero.health - 20) {
     return true;
   } else {
