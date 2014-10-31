@@ -326,10 +326,11 @@ util.diff = function (a, b) {
 /**
  * Get an array of all tiles at or below a given Manhattan distance from a tile
  *
- * @param {object} board the game board
- * @param {object} center the tile at the center of the circle
+ * @param {Object} board the game board
+ * @param {Object} center the tile at the center of the circle
  * @param {number} radius the radius of the circle
- * @return {array} the set of tiles whose Manhattan distance to center is <= radius
+ * @return {Object[]} the set of tiles whose Manhattan distance to center is <=
+ *  radius
  */
 helpers.tilesInManhattanCircle = function (board, center, radius) {
   var dft = center.distanceFromTop,
@@ -352,10 +353,10 @@ helpers.tilesInManhattanCircle = function (board, center, radius) {
 /**
  * Get an array of all tiles at a given Manhattan distance from a tile
  *
- * @param {object} board the game board
- * @param {object} center the tile at the center of the circle
+ * @param {Object} board the game board
+ * @param {Object} center the tile at the center of the circle
  * @param {number} radius the radius of the circle
- * @return {array} the set of tiles whose Manhattan distance to center is radius
+ * @return {Object[]} the set of tiles whose Manhattan distance to center is radius
  */
 helpers.tilesOnManhattanCircle = function (board, center, radius) {
   return util.diff(
